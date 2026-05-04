@@ -1,0 +1,1539 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>url-shortener — Learning Guide</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:       #0d1117;
+      --surface:  #161b22;
+      --surface2: #1c2129;
+      --border:   #30363d;
+      --text:     #e6edf3;
+      --muted:    #8b949e;
+      --accent:   #58a6ff;
+      --green:    #3fb950;
+      --red:      #f78166;
+      --purple:   #d2a8ff;
+      --orange:   #ffa657;
+      --yellow:   #e3b341;
+    }
+
+    html, body {
+      height: 100%;
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+      font-size: 14px;
+      line-height: 1.6;
+    }
+
+    /* ──────────── LAYOUT ──────────── */
+    .app { display: flex; flex-direction: column; height: 100vh; }
+
+    header {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 0 1.5rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      height: 52px;
+      flex-shrink: 0;
+    }
+
+    .logo { font-weight: 700; font-size: 1rem; color: var(--text); display:flex; align-items:center; gap:.6rem; }
+    .logo-dot { width:9px; height:9px; border-radius:50%; background:var(--accent); display:inline-block; }
+
+    .home-link {
+      font-size:.8rem; color:var(--muted); text-decoration:none;
+      padding:.3rem .7rem; border:1px solid var(--border); border-radius:6px;
+      transition: color .15s, border-color .15s;
+    }
+    .home-link:hover { color:var(--text); border-color:var(--muted); }
+
+    /* ──────────── TABS ──────────── */
+    nav.tabs {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      padding: 0 1.5rem;
+      gap: 0;
+      flex-shrink: 0;
+    }
+
+    .tab-btn {
+      padding: .7rem 1.25rem;
+      font-size: .85rem;
+      font-weight: 600;
+      color: var(--muted);
+      background: none;
+      border: none;
+      border-bottom: 2px solid transparent;
+      cursor: pointer;
+      transition: color .15s, border-color .15s;
+      white-space: nowrap;
+    }
+    .tab-btn:hover { color: var(--text); }
+    .tab-btn.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+    .content { flex: 1; overflow: hidden; position: relative; }
+    .tab-panel { display: none; height: 100%; overflow: auto; padding: 1.5rem; }
+    .tab-panel.active { display: block; }
+
+    /* ──────────── ARCHITECTURE TAB ──────────── */
+    #arch-panel { padding: 0; overflow: hidden; }
+
+    .arch-layout {
+      display: flex;
+      height: 100%;
+    }
+
+    .diagram-area {
+      flex: 1;
+      overflow: auto;
+      padding: 1.5rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 0;
+    }
+
+    .side-panel {
+      width: 340px;
+      flex-shrink: 0;
+      background: var(--surface);
+      border-left: 1px solid var(--border);
+      overflow-y: auto;
+      padding: 1.5rem;
+      transition: width .3s;
+    }
+
+    .side-panel.empty { width: 260px; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; }
+
+    .side-panel-hint {
+      color: var(--muted);
+      font-size: .85rem;
+    }
+
+    .side-panel-hint svg { display:block; margin: 0 auto 1rem; opacity:.3; }
+
+    .node-detail { display: none; }
+    .node-detail.visible { display: block; }
+
+    .node-detail h2 {
+      font-size: 1.05rem;
+      font-weight: 700;
+      margin-bottom: .25rem;
+      display: flex;
+      align-items: center;
+      gap: .6rem;
+    }
+
+    .node-tag {
+      font-size: .7rem;
+      font-weight: 600;
+      padding: .15rem .5rem;
+      border-radius: 999px;
+      letter-spacing: .05em;
+    }
+    .tag-controller { background:rgba(88,166,255,.2); color:var(--accent); }
+    .tag-service     { background:rgba(63,185,80,.2);  color:var(--green); }
+    .tag-repo        { background:rgba(210,168,255,.2); color:var(--purple); }
+    .tag-entity      { background:rgba(255,166,87,.2);  color:var(--orange); }
+    .tag-util        { background:rgba(227,179,65,.2);  color:var(--yellow); }
+    .tag-config      { background:rgba(141,113,255,.2); color:#8d71ff; }
+    .tag-scheduler   { background:rgba(247,129,102,.2); color:var(--red); }
+    .tag-dto         { background:rgba(139,148,158,.2); color:var(--muted); }
+    .tag-infra       { background:rgba(88,166,255,.15); color:var(--accent); }
+    .tag-exception   { background:rgba(247,129,102,.2); color:var(--red); }
+
+    .node-path {
+      font-family: 'SF Mono', 'Fira Code', monospace;
+      font-size: .75rem;
+      color: var(--muted);
+      margin-bottom: 1rem;
+      word-break: break-all;
+    }
+
+    .node-desc {
+      font-size: .85rem;
+      color: var(--text);
+      margin-bottom: 1.25rem;
+      line-height: 1.7;
+    }
+
+    .detail-section { margin-bottom: 1.25rem; }
+    .detail-section h3 {
+      font-size: .72rem;
+      text-transform: uppercase;
+      letter-spacing: .08em;
+      color: var(--muted);
+      margin-bottom: .6rem;
+      border-bottom: 1px solid var(--border);
+      padding-bottom: .4rem;
+    }
+
+    .prop-list { list-style: none; }
+    .prop-list li {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      padding: .3rem 0;
+      border-bottom: 1px solid rgba(48,54,61,.5);
+      gap: 1rem;
+    }
+    .prop-list li:last-child { border-bottom: none; }
+    .prop-key { color: var(--muted); font-size: .8rem; flex-shrink: 0; }
+    .prop-val { color: var(--text); font-size: .8rem; text-align: right; font-family: 'SF Mono','Fira Code',monospace; }
+
+    pre.code-block {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 1rem;
+      font-family: 'SF Mono','Fira Code',monospace;
+      font-size: .75rem;
+      overflow-x: auto;
+      white-space: pre;
+      line-height: 1.6;
+      color: var(--text);
+    }
+
+    /* keyword highlights inside pre */
+    .kw  { color: var(--purple); }
+    .an  { color: var(--yellow); }
+    .st  { color: var(--green); }
+    .cm  { color: var(--muted); }
+    .ty  { color: var(--orange); }
+
+    /* ──────────── SVG DIAGRAM ──────────── */
+    #arch-svg {
+      max-width: 100%;
+      height: auto;
+    }
+
+    .svg-node {
+      cursor: pointer;
+      transition: filter .2s;
+    }
+    .svg-node:hover rect, .svg-node:hover ellipse, .svg-node:hover circle {
+      filter: brightness(1.3);
+    }
+    .svg-node.selected rect { stroke: var(--accent) !important; stroke-width: 2.5px !important; }
+    .svg-node.selected ellipse { stroke: var(--accent) !important; stroke-width: 2.5px !important; }
+
+    /* animated packets */
+    @keyframes dash-flow {
+      to { stroke-dashoffset: -20; }
+    }
+    .edge-flow {
+      stroke-dasharray: 6 4;
+      animation: dash-flow 1s linear infinite;
+    }
+
+    @keyframes packet-move {
+      0%   { opacity: 0; }
+      10%  { opacity: 1; }
+      90%  { opacity: 1; }
+      100% { opacity: 0; }
+    }
+
+    .packet {
+      animation: packet-move 2s ease-in-out infinite;
+    }
+
+    /* ──────────── JOURNEY TAB ──────────── */
+    .journey-selector {
+      display: flex;
+      gap: .6rem;
+      flex-wrap: wrap;
+      margin-bottom: 1.5rem;
+    }
+
+    .journey-btn {
+      padding: .45rem 1rem;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+      background: var(--surface);
+      color: var(--muted);
+      font-size: .82rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all .15s;
+    }
+    .journey-btn:hover { color:var(--text); border-color:var(--muted); }
+    .journey-btn.active { background:var(--accent); color:#0d1117; border-color:var(--accent); }
+
+    .journey-container { max-width: 760px; }
+
+    .journey-header { margin-bottom: 1.5rem; }
+    .journey-header h2 { font-size: 1.2rem; font-weight: 700; margin-bottom: .4rem; }
+    .journey-header p { font-size: .88rem; color: var(--muted); }
+
+    .steps { position: relative; }
+    .steps::before {
+      content: '';
+      position: absolute;
+      left: 18px;
+      top: 0; bottom: 0;
+      width: 2px;
+      background: var(--border);
+    }
+
+    .step {
+      display: flex;
+      gap: 1.1rem;
+      margin-bottom: 1rem;
+      position: relative;
+      opacity: 0;
+      transform: translateY(12px);
+      transition: opacity .35s ease, transform .35s ease;
+    }
+    .step.visible { opacity: 1; transform: none; }
+
+    .step-num {
+      width: 36px; height: 36px;
+      border-radius: 50%;
+      border: 2px solid var(--border);
+      background: var(--surface);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: .78rem;
+      font-weight: 700;
+      flex-shrink: 0;
+      color: var(--accent);
+      z-index: 1;
+      position: relative;
+    }
+
+    .step.highlight .step-num {
+      background: var(--accent);
+      color: #0d1117;
+      border-color: var(--accent);
+    }
+
+    .step-body {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 1rem;
+      flex: 1;
+    }
+
+    .step-body h3 { font-size: .88rem; font-weight: 700; margin-bottom: .25rem; }
+    .step-body p { font-size: .82rem; color: var(--muted); }
+    .step-body .step-code {
+      margin-top: .75rem;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: .75rem;
+      font-family: 'SF Mono','Fira Code',monospace;
+      font-size: .73rem;
+      overflow-x: auto;
+      white-space: pre;
+      color: var(--green);
+    }
+
+    .step-tag {
+      display:inline-block;
+      font-size:.68rem;
+      padding:.1rem .45rem;
+      border-radius:999px;
+      font-weight:600;
+      margin-left:.5rem;
+      vertical-align:middle;
+    }
+    .step-tag.redis  { background:rgba(247,129,102,.2); color:var(--red); }
+    .step-tag.pg     { background:rgba(88,166,255,.2);  color:var(--accent); }
+    .step-tag.http   { background:rgba(63,185,80,.2);   color:var(--green); }
+    .step-tag.svc    { background:rgba(210,168,255,.2); color:var(--purple); }
+    .step-tag.cron   { background:rgba(255,166,87,.2);  color:var(--orange); }
+
+    /* ──────────── COMPONENTS / TOPICS TABS ──────────── */
+    .card-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+      gap: 1rem;
+      max-width: 1100px;
+    }
+
+    .comp-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 1.25rem;
+      transition: border-color .15s, transform .15s;
+    }
+    .comp-card:hover { border-color: var(--muted); transform: translateY(-2px); }
+
+    .comp-card-header {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      margin-bottom: .6rem;
+      gap: .5rem;
+    }
+
+    .comp-card h3 { font-size: .92rem; font-weight: 700; line-height:1.3; }
+    .comp-card .comp-path {
+      font-family:'SF Mono','Fira Code',monospace;
+      font-size:.71rem;
+      color:var(--muted);
+      margin-bottom:.7rem;
+      word-break:break-all;
+    }
+    .comp-card .comp-desc {
+      font-size:.82rem;
+      color:var(--muted);
+      margin-bottom:.9rem;
+      line-height:1.65;
+    }
+
+    .comp-responsibilities { list-style:none; }
+    .comp-responsibilities li {
+      font-size:.78rem;
+      color:var(--text);
+      padding:.2rem 0;
+      display:flex;
+      align-items:flex-start;
+      gap:.5rem;
+    }
+    .comp-responsibilities li::before {
+      content:'›';
+      color:var(--accent);
+      flex-shrink:0;
+      font-weight:700;
+    }
+
+    .topic-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius:10px;
+      padding:1.25rem;
+      transition: border-color .15s, transform .15s;
+    }
+    .topic-card:hover { border-color:var(--muted); transform:translateY(-2px); }
+    .topic-card h3 { font-size:.9rem; font-weight:700; font-family:'SF Mono','Fira Code',monospace; margin-bottom:.4rem; }
+    .topic-card .topic-type {
+      font-size:.7rem;
+      text-transform:uppercase;
+      letter-spacing:.06em;
+      color:var(--muted);
+      margin-bottom:.75rem;
+    }
+    .topic-card .topic-desc { font-size:.82rem; color:var(--muted); margin-bottom:.9rem; line-height:1.65; }
+
+    .kv-row { display:flex; justify-content:space-between; align-items:center; padding:.3rem 0; border-bottom:1px solid rgba(48,54,61,.5); }
+    .kv-row:last-child { border-bottom:none; }
+    .kv-key { font-size:.78rem; color:var(--muted); }
+    .kv-val { font-size:.78rem; color:var(--text); font-family:'SF Mono','Fira Code',monospace; }
+
+    .section-header {
+      margin-bottom:1.5rem;
+    }
+    .section-header h2 { font-size:1.3rem; font-weight:700; margin-bottom:.3rem; }
+    .section-header p { font-size:.88rem; color:var(--muted); }
+
+    /* scrollbar */
+    ::-webkit-scrollbar { width:6px; height:6px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: var(--border); border-radius:3px; }
+  </style>
+</head>
+<body>
+<div class="app">
+
+  <!-- ── Header ── -->
+  <header>
+    <div class="logo">
+      <span class="logo-dot"></span>
+      url-shortener — Learning Guide
+    </div>
+    <a href="index.html" class="home-link">← Back to overview</a>
+  </header>
+
+  <!-- ── Tabs ── -->
+  <nav class="tabs">
+    <button class="tab-btn active" data-tab="arch">Architecture</button>
+    <button class="tab-btn" data-tab="journeys">Data Journeys</button>
+    <button class="tab-btn" data-tab="components">Components</button>
+    <button class="tab-btn" data-tab="topics">Cache Keys</button>
+  </nav>
+
+  <!-- ── Content ── -->
+  <div class="content">
+
+    <!-- ═══════════════ ARCHITECTURE TAB ═══════════════ -->
+    <div id="arch-panel" class="tab-panel active">
+      <div class="arch-layout">
+        <div class="diagram-area">
+          <svg id="arch-svg" viewBox="0 0 780 520" xmlns="http://www.w3.org/2000/svg">
+            <defs>
+              <marker id="arrow" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+                <path d="M0,0 L0,6 L8,3 z" fill="#58a6ff" />
+              </marker>
+              <marker id="arrow-green" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+                <path d="M0,0 L0,6 L8,3 z" fill="#3fb950" />
+              </marker>
+              <marker id="arrow-red" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+                <path d="M0,0 L0,6 L8,3 z" fill="#f78166" />
+              </marker>
+              <marker id="arrow-orange" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+                <path d="M0,0 L0,6 L8,3 z" fill="#ffa657" />
+              </marker>
+              <filter id="glow">
+                <feGaussianBlur stdDeviation="2" result="blur"/>
+                <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+              </filter>
+            </defs>
+
+            <!-- tier labels -->
+            <text x="16" y="38" fill="#8b949e" font-size="10" font-family="system-ui" letter-spacing="1" text-anchor="start">CLIENT</text>
+            <text x="16" y="158" fill="#8b949e" font-size="10" font-family="system-ui" letter-spacing="1" text-anchor="start">REST LAYER</text>
+            <text x="16" y="258" fill="#8b949e" font-size="10" font-family="system-ui" letter-spacing="1" text-anchor="start">SERVICE LAYER</text>
+            <text x="16" y="358" fill="#8b949e" font-size="10" font-family="system-ui" letter-spacing="1" text-anchor="start">DATA LAYER</text>
+            <text x="16" y="468" fill="#8b949e" font-size="10" font-family="system-ui" letter-spacing="1" text-anchor="start">SCHEDULER</text>
+
+            <!-- tier dividers -->
+            <line x1="0" y1="50"  x2="780" y2="50"  stroke="#30363d" stroke-width="1"/>
+            <line x1="0" y1="170" x2="780" y2="170" stroke="#30363d" stroke-width="1"/>
+            <line x1="0" y1="280" x2="780" y2="280" stroke="#30363d" stroke-width="1"/>
+            <line x1="0" y1="390" x2="780" y2="390" stroke="#30363d" stroke-width="1"/>
+
+            <!-- ── EDGES (draw first, behind nodes) ── -->
+
+            <!-- Client → UrlController -->
+            <path d="M 390 95 L 390 140" stroke="#58a6ff" stroke-width="1.5" fill="none" marker-end="url(#arrow)" class="edge-flow" stroke-dasharray="6 4"/>
+
+            <!-- UrlController → UrlService -->
+            <path d="M 390 210 L 390 250" stroke="#58a6ff" stroke-width="1.5" fill="none" marker-end="url(#arrow)" class="edge-flow" stroke-dasharray="6 4"/>
+
+            <!-- UrlService → UrlRepository -->
+            <path d="M 310 310 L 230 350" stroke="#d2a8ff" stroke-width="1.5" fill="none" marker-end="url(#arrow)" class="edge-flow" stroke-dasharray="6 4"/>
+
+            <!-- UrlService → Redis -->
+            <path d="M 470 310 L 580 350" stroke="#f78166" stroke-width="1.5" fill="none" marker-end="url(#arrow-red)" class="edge-flow" stroke-dasharray="6 4"/>
+
+            <!-- UrlRepository → PostgreSQL -->
+            <path d="M 200 410 L 200 440" stroke="#d2a8ff" stroke-width="1.5" fill="none" marker-end="url(#arrow)" stroke-dasharray="4 4"/>
+
+            <!-- ExpirationCleanupJob → UrlRepository (scheduler) -->
+            <path d="M 600 450 Q 400 430 260 400" stroke="#ffa657" stroke-width="1.5" fill="none" marker-end="url(#arrow-orange)" class="edge-flow" stroke-dasharray="6 4"/>
+
+            <!-- GlobalExceptionHandler (side) → UrlController -->
+            <path d="M 670 185 L 490 185" stroke="#f78166" stroke-width="1" fill="none" stroke-dasharray="4 3" opacity=".6"/>
+
+            <!-- ── NODES ── -->
+
+            <!-- HTTP Client -->
+            <g class="svg-node" id="node-client" data-id="client">
+              <rect x="300" y="58" width="180" height="44" rx="8" fill="#161b22" stroke="#30363d" stroke-width="1.5"/>
+              <text x="390" y="76" text-anchor="middle" fill="#e6edf3" font-size="12" font-weight="700" font-family="system-ui">HTTP Client</text>
+              <text x="390" y="93" text-anchor="middle" fill="#8b949e" font-size="10" font-family="system-ui">Browser / curl / API consumer</text>
+            </g>
+
+            <!-- UrlController -->
+            <g class="svg-node" id="node-urlcontroller" data-id="urlcontroller">
+              <rect x="270" y="143" width="240" height="44" rx="8" fill="#1c2129" stroke="#58a6ff" stroke-width="1.5"/>
+              <text x="390" y="161" text-anchor="middle" fill="#58a6ff" font-size="12" font-weight="700" font-family="system-ui">UrlController</text>
+              <text x="390" y="178" text-anchor="middle" fill="#8b949e" font-size="10" font-family="system-ui">POST /shorten · GET /{shortCode}</text>
+            </g>
+
+            <!-- GlobalExceptionHandler -->
+            <g class="svg-node" id="node-globalexceptionhandler" data-id="globalexceptionhandler">
+              <rect x="580" y="160" width="175" height="44" rx="8" fill="#1c2129" stroke="#f78166" stroke-width="1.5" stroke-dasharray="5 2"/>
+              <text x="667" y="178" text-anchor="middle" fill="#f78166" font-size="11" font-weight="700" font-family="system-ui">GlobalException</text>
+              <text x="667" y="193" text-anchor="middle" fill="#f78166" font-size="11" font-weight="700" font-family="system-ui">Handler</text>
+            </g>
+
+            <!-- UrlService -->
+            <g class="svg-node" id="node-urlservice" data-id="urlservice">
+              <rect x="270" y="253" width="240" height="44" rx="8" fill="#1c2129" stroke="#3fb950" stroke-width="1.5"/>
+              <text x="390" y="271" text-anchor="middle" fill="#3fb950" font-size="12" font-weight="700" font-family="system-ui">UrlService</text>
+              <text x="390" y="288" text-anchor="middle" fill="#8b949e" font-size="10" font-family="system-ui">Business logic · cache-aside pattern</text>
+            </g>
+
+            <!-- Base62Encoder (side of UrlService) -->
+            <g class="svg-node" id="node-base62encoder" data-id="base62encoder">
+              <rect x="60" y="253" width="155" height="44" rx="8" fill="#1c2129" stroke="#e3b341" stroke-width="1.5"/>
+              <text x="137" y="271" text-anchor="middle" fill="#e3b341" font-size="11" font-weight="700" font-family="system-ui">Base62Encoder</text>
+              <text x="137" y="288" text-anchor="middle" fill="#8b949e" font-size="10" font-family="system-ui">long ID → short code</text>
+            </g>
+
+            <!-- edge: UrlService → Base62Encoder -->
+            <path d="M 270 278 L 215 278" stroke="#e3b341" stroke-width="1" fill="none" stroke-dasharray="4 3" opacity=".7" marker-end="url(#arrow-orange)"/>
+
+            <!-- UrlRepository -->
+            <g class="svg-node" id="node-urlrepository" data-id="urlrepository">
+              <rect x="90" y="353" width="220" height="44" rx="8" fill="#1c2129" stroke="#d2a8ff" stroke-width="1.5"/>
+              <text x="200" y="371" text-anchor="middle" fill="#d2a8ff" font-size="12" font-weight="700" font-family="system-ui">UrlRepository</text>
+              <text x="200" y="388" text-anchor="middle" fill="#8b949e" font-size="10" font-family="system-ui">Spring Data JPA · JPQL queries</text>
+            </g>
+
+            <!-- Redis -->
+            <g class="svg-node" id="node-redis" data-id="redis">
+              <rect x="510" y="353" width="200" height="44" rx="8" fill="#1c2129" stroke="#f78166" stroke-width="1.5"/>
+              <text x="610" y="371" text-anchor="middle" fill="#f78166" font-size="12" font-weight="700" font-family="system-ui">Redis</text>
+              <text x="610" y="388" text-anchor="middle" fill="#8b949e" font-size="10" font-family="system-ui">url:{code} string cache · TTL</text>
+            </g>
+
+            <!-- PostgreSQL -->
+            <g class="svg-node" id="node-postgresql" data-id="postgresql">
+              <ellipse cx="200" cy="462" rx="100" ry="30" fill="#1c2129" stroke="#58a6ff" stroke-width="1.5"/>
+              <text x="200" y="458" text-anchor="middle" fill="#58a6ff" font-size="12" font-weight="700" font-family="system-ui">PostgreSQL</text>
+              <text x="200" y="473" text-anchor="middle" fill="#8b949e" font-size="10" font-family="system-ui">url_mappings table</text>
+            </g>
+
+            <!-- ExpirationCleanupJob -->
+            <g class="svg-node" id="node-expirationcleanupjob" data-id="expirationcleanupjob">
+              <rect x="500" y="420" width="220" height="44" rx="8" fill="#1c2129" stroke="#ffa657" stroke-width="1.5"/>
+              <text x="610" y="438" text-anchor="middle" fill="#ffa657" font-size="11" font-weight="700" font-family="system-ui">ExpirationCleanupJob</text>
+              <text x="610" y="454" text-anchor="middle" fill="#8b949e" font-size="10" font-family="system-ui">@Scheduled 03:00 cron · bulk delete</text>
+            </g>
+
+            <!-- RedisConfig (floating) -->
+            <g class="svg-node" id="node-redisconfig" data-id="redisconfig">
+              <rect x="510" y="253" width="175" height="44" rx="8" fill="#1c2129" stroke="#8d71ff" stroke-width="1.5" stroke-dasharray="5 2"/>
+              <text x="597" y="271" text-anchor="middle" fill="#8d71ff" font-size="11" font-weight="700" font-family="system-ui">RedisConfig</text>
+              <text x="597" y="288" text-anchor="middle" fill="#8b949e" font-size="10" font-family="system-ui">CacheManager · 24h TTL</text>
+            </g>
+
+            <!-- Animated packets -->
+            <!-- Client → Controller packet -->
+            <circle r="5" fill="#58a6ff" opacity=".9" class="packet" style="animation-delay:0s">
+              <animateMotion dur="2s" repeatCount="indefinite" begin="0s">
+                <mpath href="#path-client-ctrl"/>
+              </animateMotion>
+            </circle>
+            <path id="path-client-ctrl" d="M390 102 L390 143" fill="none" visibility="hidden"/>
+
+            <!-- Controller → Service packet -->
+            <circle r="5" fill="#58a6ff" opacity=".9" class="packet" style="animation-delay:0.4s">
+              <animateMotion dur="2s" repeatCount="indefinite" begin="0.4s">
+                <mpath href="#path-ctrl-svc"/>
+              </animateMotion>
+            </circle>
+            <path id="path-ctrl-svc" d="M390 210 L390 253" fill="none" visibility="hidden"/>
+
+            <!-- Service → Redis packet -->
+            <circle r="5" fill="#f78166" opacity=".9" class="packet" style="animation-delay:0.8s">
+              <animateMotion dur="2s" repeatCount="indefinite" begin="0.8s">
+                <mpath href="#path-svc-redis"/>
+              </animateMotion>
+            </circle>
+            <path id="path-svc-redis" d="M470 310 L580 353" fill="none" visibility="hidden"/>
+
+            <!-- Service → Repo packet -->
+            <circle r="5" fill="#d2a8ff" opacity=".9" class="packet" style="animation-delay:1.2s">
+              <animateMotion dur="2s" repeatCount="indefinite" begin="1.2s">
+                <mpath href="#path-svc-repo"/>
+              </animateMotion>
+            </circle>
+            <path id="path-svc-repo" d="M310 310 L230 353" fill="none" visibility="hidden"/>
+
+            <!-- Repo → PG packet -->
+            <circle r="5" fill="#d2a8ff" opacity=".9" class="packet" style="animation-delay:1.6s">
+              <animateMotion dur="2s" repeatCount="indefinite" begin="1.6s">
+                <mpath href="#path-repo-pg"/>
+              </animateMotion>
+            </circle>
+            <path id="path-repo-pg" d="M200 397 L200 432" fill="none" visibility="hidden"/>
+
+          </svg>
+        </div>
+
+        <!-- ── Side panel ── -->
+        <div class="side-panel empty" id="side-panel">
+          <div class="side-panel-hint">
+            <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+              <circle cx="12" cy="12" r="10"/><path d="M12 8v4m0 4h.01"/>
+            </svg>
+            Click any component in the diagram to see details, properties, and code examples.
+          </div>
+          <div class="node-detail" id="node-detail"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══════════════ JOURNEYS TAB ═══════════════ -->
+    <div id="journeys-panel" class="tab-panel">
+      <div class="journey-selector" id="journey-selector"></div>
+      <div class="journey-container" id="journey-container"></div>
+    </div>
+
+    <!-- ═══════════════ COMPONENTS TAB ═══════════════ -->
+    <div id="components-panel" class="tab-panel">
+      <div class="section-header">
+        <h2>Components</h2>
+        <p>Every class in the url-shortener service — click to jump to source</p>
+      </div>
+      <div class="card-grid" id="comp-grid"></div>
+    </div>
+
+    <!-- ═══════════════ CACHE KEYS TAB ═══════════════ -->
+    <div id="topics-panel" class="tab-panel">
+      <div class="section-header">
+        <h2>Cache Keys &amp; Redis Schema</h2>
+        <p>Redis key patterns, TTL strategy, and value format used by UrlService</p>
+      </div>
+      <div class="card-grid" id="topics-grid"></div>
+    </div>
+
+  </div><!-- /content -->
+</div><!-- /app -->
+
+<script>
+/* ══════════════════════════════════════════════════
+   DATA
+══════════════════════════════════════════════════ */
+
+const NODES = {
+  client: {
+    label: 'HTTP Client',
+    tag: 'infra', tagLabel: 'External',
+    path: 'Browser / curl / API consumer',
+    desc: 'Any HTTP client that interacts with the url-shortener REST API. Sends POST /shorten requests to create short URLs and GET /{shortCode} requests to be redirected to the original destination.',
+    props: [
+      { k: 'Protocol', v: 'HTTP/1.1' },
+      { k: 'Endpoints used', v: 'POST /shorten, GET /{code}' },
+      { k: 'Response formats', v: '201 Created, 302 Found, 4xx' },
+    ],
+    code: `# Create a short URL
+curl -X POST http://localhost:8080/shorten \\
+  -H "Content-Type: application/json" \\
+  -d '{
+    "originalUrl": "https://example.com/very/long/path",
+    "alias": "my-link",
+    "expiresAt": "2026-12-31T23:59:59Z"
+  }'
+
+# Follow a redirect
+curl -L http://localhost:8080/my-link`,
+  },
+
+  urlcontroller: {
+    label: 'UrlController',
+    tag: 'controller', tagLabel: 'Controller',
+    path: 'com.demo.urlshortener.controller.UrlController',
+    desc: 'Thin REST controller annotated with @RestController. Handles HTTP concerns only: status codes, request/response mapping, and header construction. All business logic is delegated to UrlService. Error responses for known failures are produced by GlobalExceptionHandler.',
+    props: [
+      { k: 'Annotation', v: '@RestController' },
+      { k: 'POST /shorten', v: '201 Created' },
+      { k: 'GET /{shortCode}', v: '302 Found + Location header' },
+      { k: 'Validation', v: '@Valid on ShortenRequest' },
+    ],
+    code: `@PostMapping("/shorten")
+public ResponseEntity<ShortenResponse> shorten(
+    @Valid @RequestBody ShortenRequest request) {
+  ShortenResponse response = urlService.shorten(request);
+  return ResponseEntity.status(HttpStatus.CREATED).body(response);
+}
+
+@GetMapping("/{shortCode}")
+public ResponseEntity<Void> redirect(
+    @PathVariable String shortCode) {
+  String originalUrl = urlService.resolve(shortCode);
+  return ResponseEntity.status(HttpStatus.FOUND)
+      .header(HttpHeaders.LOCATION, originalUrl)
+      .build();
+}`,
+  },
+
+  urlservice: {
+    label: 'UrlService',
+    tag: 'service', tagLabel: 'Service',
+    path: 'com.demo.urlshortener.service.UrlService',
+    desc: 'Core business logic component. Implements two operations: shorten() which creates a new URL mapping using either a custom alias or auto-generated Base62 code, and resolve() which looks up the original URL using cache-aside (Redis first, PostgreSQL on miss). Drives Redis directly via StringRedisTemplate.',
+    props: [
+      { k: 'Annotation', v: '@Service, @Transactional' },
+      { k: 'Cache key prefix', v: '"url:"' },
+      { k: 'Default TTL', v: '24 hours' },
+      { k: 'Two-write pattern', v: 'PENDING → encode(id) → save' },
+      { k: 'Redis client', v: 'StringRedisTemplate' },
+    ],
+    code: `// Cache-aside resolve
+String cached = redisTemplate.opsForValue()
+    .get("url:" + shortCode);
+if (cached != null) return cached; // cache HIT
+
+UrlMapping mapping = repository
+    .findByShortCode(shortCode)
+    .orElseThrow(() -> new UrlNotFoundException(shortCode));
+
+if (mapping.isExpired())
+    throw new UrlNotFoundException(shortCode);
+
+// Re-populate cache
+cacheUrl(shortCode, mapping.getOriginalUrl(),
+    mapping.getExpiresAt());
+return mapping.getOriginalUrl();`,
+  },
+
+  urlrepository: {
+    label: 'UrlRepository',
+    tag: 'repo', tagLabel: 'Repository',
+    path: 'com.demo.urlshortener.repository.UrlRepository',
+    desc: 'Spring Data JPA repository for UrlMapping entities. Extends JpaRepository to inherit standard CRUD. Adds three custom queries: point lookup by short code (redirect hot path), existence check for alias uniqueness, and bulk delete of expired records for the cleanup job.',
+    props: [
+      { k: 'Extends', v: 'JpaRepository<UrlMapping, Long>' },
+      { k: 'Table', v: 'url_mappings' },
+      { k: 'Index', v: 'idx_short_code (unique)' },
+      { k: 'Custom queries', v: 'findByShortCode, existsByShortCode, deleteAllExpired' },
+    ],
+    code: `Optional<UrlMapping> findByShortCode(String shortCode);
+
+boolean existsByShortCode(String shortCode);
+
+@Modifying
+@Query("DELETE FROM UrlMapping u " +
+       "WHERE u.expiresAt IS NOT NULL " +
+       "AND u.expiresAt < :now")
+int deleteAllExpired(Instant now);`,
+  },
+
+  postgresql: {
+    label: 'PostgreSQL',
+    tag: 'infra', tagLabel: 'Infrastructure',
+    path: 'localhost:5432 / database: urlshortener',
+    desc: 'Persistent store for all URL mappings. Hibernate auto-creates the url_mappings table on startup (ddl-auto=update). The short_code column has a unique B-tree index for O(log n) point lookups on the redirect hot path and fast alias existence checks.',
+    props: [
+      { k: 'Port', v: '5432' },
+      { k: 'Database', v: 'urlshortener' },
+      { k: 'Table', v: 'url_mappings' },
+      { k: 'DDL', v: 'ddl-auto=update (dev only)' },
+      { k: 'Index', v: 'idx_short_code UNIQUE' },
+      { k: 'Dialect', v: 'PostgreSQLDialect' },
+    ],
+    code: `-- Effective schema (Hibernate-generated)
+CREATE TABLE url_mappings (
+  id          BIGSERIAL PRIMARY KEY,
+  short_code  VARCHAR(20)   NOT NULL UNIQUE,
+  original_url VARCHAR(2048) NOT NULL,
+  created_at  TIMESTAMPTZ   NOT NULL,
+  expires_at  TIMESTAMPTZ
+);
+CREATE UNIQUE INDEX idx_short_code
+  ON url_mappings (short_code);`,
+  },
+
+  redis: {
+    label: 'Redis',
+    tag: 'infra', tagLabel: 'Infrastructure',
+    path: 'localhost:6379',
+    desc: 'In-memory string cache for the redirect hot path. Keyed as url:{shortCode} with plain string values (the original URL). TTL equals the remaining lifetime for expiring URLs, or 24 hours for permanent ones. Redis keys for expired URLs are not explicitly purged — they expire via their own TTL.',
+    props: [
+      { k: 'Port', v: '6379' },
+      { k: 'Key pattern', v: 'url:{shortCode}' },
+      { k: 'Value type', v: 'plain string (original URL)' },
+      { k: 'TTL (with expiry)', v: 'expiresAt - now' },
+      { k: 'TTL (permanent)', v: '24 hours' },
+      { k: 'Client', v: 'StringRedisTemplate' },
+    ],
+    code: `# Key/value example
+SET url:my-link "https://example.com/long/path" EX 86400
+
+# Check a cached URL
+GET url:my-link
+# => "https://example.com/long/path"
+
+# Check TTL
+TTL url:my-link
+# => 84231  (seconds remaining)`,
+  },
+
+  base62encoder: {
+    label: 'Base62Encoder',
+    tag: 'util', tagLabel: 'Utility',
+    path: 'com.demo.urlshortener.util.Base62Encoder',
+    desc: 'Spring @Component that encodes positive long IDs into compact Base62 strings using the alphabet 0-9a-zA-Z. Used by UrlService to convert auto-increment PostgreSQL IDs into short codes. Code length grows logarithmically — 4 chars for up to ~14.8M URLs, 6 chars for up to ~56B.',
+    props: [
+      { k: 'Alphabet', v: '0-9a-zA-Z (62 chars)' },
+      { k: 'Base', v: '62' },
+      { k: 'encode(1)', v: '"1"' },
+      { k: 'encode(62)', v: '"10"' },
+      { k: 'encode(1_000_000)', v: '"4c92"' },
+      { k: 'Max 6-char capacity', v: '~56 billion IDs' },
+    ],
+    code: `public String encode(long id) {
+  if (id <= 0) throw new IllegalArgumentException(
+      "ID must be a positive number");
+
+  StringBuilder sb = new StringBuilder();
+  while (id > 0) {
+    sb.append(ALPHABET.charAt((int)(id % 62)));
+    id /= 62;
+  }
+  return sb.reverse().toString();
+}
+// 1        → "1"
+// 1000000  → "4c92"`,
+  },
+
+  redisconfig: {
+    label: 'RedisConfig',
+    tag: 'config', tagLabel: 'Configuration',
+    path: 'com.demo.urlshortener.config.RedisConfig',
+    desc: 'Spring @Configuration that declares a RedisCacheManager bean with 24-hour TTL, String key serialization, and JSON value serialization via GenericJackson2JsonRedisSerializer. Note: UrlService drives Redis directly via StringRedisTemplate (cache-aside), so this CacheManager is registered for completeness but not actively used by @Cacheable annotations.',
+    props: [
+      { k: 'Annotation', v: '@Configuration' },
+      { k: 'Bean', v: 'CacheManager' },
+      { k: 'TTL', v: '24 hours' },
+      { k: 'Key serializer', v: 'StringRedisSerializer' },
+      { k: 'Value serializer', v: 'GenericJackson2JsonRedisSerializer' },
+      { k: 'Null caching', v: 'disabled' },
+    ],
+    code: `@Bean
+public CacheManager cacheManager(
+    RedisConnectionFactory cf) {
+  RedisCacheConfiguration config =
+    RedisCacheConfiguration.defaultCacheConfig()
+      .entryTtl(Duration.ofHours(24))
+      .disableCachingNullValues()
+      .serializeKeysWith(fromSerializer(
+          new StringRedisSerializer()))
+      .serializeValuesWith(fromSerializer(
+          new GenericJackson2JsonRedisSerializer()));
+  return RedisCacheManager.builder(cf)
+      .cacheDefaults(config).build();
+}`,
+  },
+
+  expirationcleanupjob: {
+    label: 'ExpirationCleanupJob',
+    tag: 'scheduler', tagLabel: 'Scheduler',
+    path: 'com.demo.urlshortener.scheduler.ExpirationCleanupJob',
+    desc: 'Spring @Component that runs on a cron schedule (default 03:00 daily) to bulk-delete expired URL mappings from PostgreSQL. Issues a single JPQL DELETE for efficiency. Does not explicitly clear Redis — stale entries expire naturally via their TTL. Multi-replica deployments should add ShedLock to prevent duplicate runs.',
+    props: [
+      { k: 'Cron', v: '0 0 3 * * * (03:00 daily)' },
+      { k: 'Config property', v: 'app.cleanup.cron' },
+      { k: 'Transactional', v: 'yes (@Transactional)' },
+      { k: 'Query', v: 'JPQL bulk DELETE' },
+      { k: 'Redis purge', v: 'no — relies on TTL expiry' },
+      { k: 'Multi-replica safe', v: 'idempotent but duplicates work' },
+    ],
+    code: `@Scheduled(cron = "${app.cleanup.cron:0 0 3 * * *}")
+@Transactional
+public void deleteExpiredUrls() {
+  log.info("Starting expired URL cleanup job");
+  int deleted = repository.deleteAllExpired(Instant.now());
+  log.info("Cleanup complete — deleted {} records",
+      deleted);
+}`,
+  },
+
+  globalexceptionhandler: {
+    label: 'GlobalExceptionHandler',
+    tag: 'exception', tagLabel: 'Exception',
+    path: 'com.demo.urlshortener.exception.GlobalExceptionHandler',
+    desc: 'Centralized @RestControllerAdvice that translates application exceptions into structured JSON error responses. Prevents stack traces from reaching clients. Handles UrlNotFoundException (404), AliasAlreadyExistsException (409), Bean Validation failures (400 with per-field map), and a catch-all (500 with generic message).',
+    props: [
+      { k: 'Annotation', v: '@RestControllerAdvice' },
+      { k: 'UrlNotFoundException', v: '404 Not Found' },
+      { k: 'AliasAlreadyExistsException', v: '409 Conflict' },
+      { k: 'MethodArgumentNotValidException', v: '400 Bad Request' },
+      { k: 'Exception (catch-all)', v: '500 Internal Server Error' },
+    ],
+    code: `// 404 handler
+@ExceptionHandler(UrlNotFoundException.class)
+public ResponseEntity<Map<String,Object>>
+    handleUrlNotFound(UrlNotFoundException ex) {
+  return buildError(HttpStatus.NOT_FOUND, ex.getMessage());
+}
+
+// 400 with per-field errors
+@ExceptionHandler(MethodArgumentNotValidException.class)
+public ResponseEntity<Map<String,Object>>
+    handleValidation(MethodArgumentNotValidException ex) {
+  Map<String, String> fields = new HashMap<>();
+  ex.getBindingResult().getFieldErrors()
+    .forEach(e -> fields.put(e.getField(),
+        e.getDefaultMessage()));
+  // ...
+}`,
+  },
+};
+
+const JOURNEYS = [
+  {
+    id: 'shorten',
+    label: 'Shorten a URL',
+    desc: 'Client POSTs a long URL (with optional alias and expiry). The service persists it to PostgreSQL and primes the Redis cache.',
+    steps: [
+      {
+        num: 1, title: 'Client sends POST /shorten',
+        tag: 'http', tagLabel: 'HTTP',
+        desc: 'Client sends a JSON body with originalUrl (required), optional alias, and optional expiresAt timestamp.',
+        code: `POST /shorten HTTP/1.1
+Content-Type: application/json
+
+{
+  "originalUrl": "https://example.com/very/long/path",
+  "alias": "my-link"
+}`,
+      },
+      {
+        num: 2, title: 'UrlController validates the request',
+        tag: 'svc', tagLabel: 'Controller',
+        desc: '@Valid triggers Jakarta Bean Validation. @NotBlank + @URL checks originalUrl. @Pattern checks alias characters. Constraint violations return 400 with a per-field error map.',
+        code: `@PostMapping("/shorten")
+public ResponseEntity<ShortenResponse> shorten(
+    @Valid @RequestBody ShortenRequest request) {
+  // Bean Validation runs before this line
+  return ResponseEntity.status(201)
+      .body(urlService.shorten(request));
+}`,
+        highlight: true,
+      },
+      {
+        num: 3, title: 'UrlService checks alias uniqueness',
+        tag: 'svc', tagLabel: 'Service',
+        desc: 'If alias is provided, UrlService calls repository.existsByShortCode(alias). If the alias is already taken, throws AliasAlreadyExistsException → GlobalExceptionHandler returns 409.',
+        code: `if (repository.existsByShortCode(request.getAlias())) {
+  throw new AliasAlreadyExistsException(request.getAlias());
+}`,
+      },
+      {
+        num: 4, title: 'PostgreSQL — persist the mapping',
+        tag: 'pg', tagLabel: 'PostgreSQL',
+        desc: 'Custom alias path: one save(). Auto-generated path: saveAndFlush() to get the auto-assigned ID, then Base62Encoder.encode(id) to produce the short code, then a second save() to store the real code.',
+        code: `// Auto-generated path (two writes)
+mapping = repo.saveAndFlush(
+    UrlMapping.builder()
+        .shortCode("PENDING") // placeholder
+        .originalUrl(request.getOriginalUrl())
+        .build());
+
+shortCode = encoder.encode(mapping.getId());
+mapping.setShortCode(shortCode);
+repo.save(mapping);`,
+        highlight: true,
+      },
+      {
+        num: 5, title: 'Cache the result in Redis',
+        tag: 'redis', tagLabel: 'Redis',
+        desc: 'The short code and original URL are written to Redis with an appropriate TTL: (expiresAt - now) if expiry is set, or 24 hours for permanent URLs. This primes the cache for the first redirect.',
+        code: `// Key: "url:my-link"  Value: "https://example.com/..."
+redisTemplate.opsForValue().set(
+    "url:" + shortCode, originalUrl, ttl);`,
+      },
+      {
+        num: 6, title: 'Return 201 Created',
+        tag: 'http', tagLabel: 'HTTP',
+        desc: 'UrlController returns 201 Created with a ShortenResponse body containing the full short URL, short code, original URL, and timestamps.',
+        code: `HTTP/1.1 201 Created
+Content-Type: application/json
+
+{
+  "shortUrl":    "http://localhost:8080/my-link",
+  "shortCode":   "my-link",
+  "originalUrl": "https://example.com/very/long/path",
+  "createdAt":   "2026-05-04T12:00:00Z",
+  "expiresAt":   null
+}`,
+      },
+    ],
+  },
+  {
+    id: 'redirect',
+    label: 'Redirect (cache hit)',
+    desc: 'Client GETs a short code. Redis has the key — the service returns a 302 redirect in sub-millisecond time without touching PostgreSQL.',
+    steps: [
+      {
+        num: 1, title: 'Client sends GET /{shortCode}',
+        tag: 'http', tagLabel: 'HTTP',
+        desc: 'Any HTTP client follows a short URL. The short code is extracted from the path variable.',
+        code: `GET /my-link HTTP/1.1
+Host: localhost:8080`,
+      },
+      {
+        num: 2, title: 'UrlController delegates to UrlService.resolve()',
+        tag: 'svc', tagLabel: 'Controller',
+        desc: 'The controller extracts the path variable and passes it to urlService.resolve(shortCode). No validation needed — any string is a valid lookup attempt.',
+        code: `@GetMapping("/{shortCode}")
+public ResponseEntity<Void> redirect(
+    @PathVariable String shortCode) {
+  String originalUrl = urlService.resolve(shortCode);
+  return ResponseEntity.status(302)
+      .header("Location", originalUrl).build();
+}`,
+      },
+      {
+        num: 3, title: 'Redis cache hit',
+        tag: 'redis', tagLabel: 'Redis',
+        desc: 'UrlService checks Redis for key url:{shortCode}. The entry is present (set during shorten or a previous miss). The cached URL is returned immediately — no database call.',
+        code: `String cached = redisTemplate.opsForValue()
+    .get("url:" + shortCode);
+
+if (cached != null) {
+    return cached; // Cache HIT — return immediately
+}`,
+        highlight: true,
+      },
+      {
+        num: 4, title: 'Return 302 Found',
+        tag: 'http', tagLabel: 'HTTP',
+        desc: 'UrlController builds a ResponseEntity with HTTP 302 and a Location header pointing to the original URL. Browsers and curl -L follow the redirect automatically.',
+        code: `HTTP/1.1 302 Found
+Location: https://example.com/very/long/path
+Content-Length: 0`,
+      },
+    ],
+  },
+  {
+    id: 'redirect-miss',
+    label: 'Redirect (cache miss)',
+    desc: 'Client GETs a short code that is not in Redis (cold start or TTL expired). The service falls back to PostgreSQL, validates expiry, re-populates the cache, then redirects.',
+    steps: [
+      {
+        num: 1, title: 'Client sends GET /{shortCode}',
+        tag: 'http', tagLabel: 'HTTP',
+        desc: 'Request arrives for a short code not currently in Redis (e.g., first request after startup or after cache TTL expiry).',
+        code: `GET /abc123 HTTP/1.1
+Host: localhost:8080`,
+      },
+      {
+        num: 2, title: 'Redis cache miss',
+        tag: 'redis', tagLabel: 'Redis',
+        desc: 'UrlService checks Redis: GET url:abc123 returns null. Execution falls through to the database path.',
+        code: `String cached = redisTemplate.opsForValue()
+    .get("url:abc123");
+// cached == null => CACHE MISS`,
+        highlight: true,
+      },
+      {
+        num: 3, title: 'Query PostgreSQL',
+        tag: 'pg', tagLabel: 'PostgreSQL',
+        desc: 'UrlRepository.findByShortCode("abc123") performs an O(log n) B-tree index scan on idx_short_code. Returns an Optional<UrlMapping>.',
+        code: `UrlMapping mapping = repository
+    .findByShortCode("abc123")
+    .orElseThrow(() ->
+        new UrlNotFoundException("abc123"));`,
+      },
+      {
+        num: 4, title: 'Expiry check',
+        tag: 'svc', tagLabel: 'Service',
+        desc: 'UrlMapping.isExpired() checks if expiresAt is non-null and in the past. If expired, UrlNotFoundException is thrown → GlobalExceptionHandler returns 404.',
+        code: `if (mapping.isExpired()) {
+  throw new UrlNotFoundException(shortCode);
+  // Never re-cached; will be cleaned up at 03:00
+}`,
+      },
+      {
+        num: 5, title: 'Re-populate Redis cache',
+        tag: 'redis', tagLabel: 'Redis',
+        desc: 'The URL is written back to Redis with the remaining TTL so subsequent requests hit the cache. TTL is computed as (expiresAt - now) for expiring URLs, or 24h for permanent ones.',
+        code: `// Re-populate for future requests
+cacheUrl(shortCode, mapping.getOriginalUrl(),
+    mapping.getExpiresAt());`,
+        highlight: true,
+      },
+      {
+        num: 6, title: 'Return 302 Found',
+        tag: 'http', tagLabel: 'HTTP',
+        desc: 'UrlController builds the 302 redirect response.',
+        code: `HTTP/1.1 302 Found
+Location: https://example.com/very/long/path`,
+      },
+    ],
+  },
+  {
+    id: 'cleanup',
+    label: 'Nightly Cleanup',
+    desc: 'At 03:00 every night, ExpirationCleanupJob bulk-deletes all expired URL mappings from PostgreSQL in a single transactional DELETE.',
+    steps: [
+      {
+        num: 1, title: 'Spring scheduler triggers at 03:00',
+        tag: 'cron', tagLabel: 'Cron',
+        desc: 'Spring\'s task scheduler evaluates the cron expression "0 0 3 * * *" (configurable via app.cleanup.cron). The deleteExpiredUrls() method is invoked in a new thread.',
+        code: `@Scheduled(cron = "${app.cleanup.cron:0 0 3 * * *}")
+@Transactional
+public void deleteExpiredUrls() { ... }`,
+      },
+      {
+        num: 2, title: 'ExpirationCleanupJob calls deleteAllExpired(now)',
+        tag: 'svc', tagLabel: 'Scheduler',
+        desc: 'The job captures the current Instant and passes it to UrlRepository.deleteAllExpired(now). The @Transactional annotation ensures the entire delete is atomic.',
+        code: `int deleted = repository.deleteAllExpired(Instant.now());
+log.info("Cleanup complete — deleted {} records", deleted);`,
+        highlight: true,
+      },
+      {
+        num: 3, title: 'JPQL bulk DELETE executes on PostgreSQL',
+        tag: 'pg', tagLabel: 'PostgreSQL',
+        desc: 'Spring Data JPA translates the JPQL into a single SQL DELETE. The WHERE clause targets only rows with a non-null expires_at in the past, leaving permanent URLs untouched.',
+        code: `-- Generated SQL
+DELETE FROM url_mappings
+WHERE expires_at IS NOT NULL
+  AND expires_at < NOW();`,
+        highlight: true,
+      },
+      {
+        num: 4, title: 'Redis entries expire naturally',
+        tag: 'redis', tagLabel: 'Redis',
+        desc: 'The job does not explicitly DELETE Redis keys. Each cached entry has its own TTL set when it was cached. Stale entries expire automatically via Redis TTL — no explicit purge needed.',
+        code: `# Redis TTL was set at cache time:
+# SET url:abc123 "https://..." EX <seconds-until-expiry>
+# After TTL elapses, Redis auto-deletes the key`,
+      },
+    ],
+  },
+];
+
+const COMPS = [
+  {
+    name: 'UrlController',
+    tag: 'controller', tagLabel: 'Controller',
+    path: 'controller/UrlController.java',
+    desc: 'Thin REST controller. Handles HTTP status codes and header construction only. All business logic is delegated to UrlService.',
+    responsibilities: [
+      'Map POST /shorten to UrlService.shorten()',
+      'Map GET /{shortCode} to UrlService.resolve()',
+      'Return 201 Created with ShortenResponse body',
+      'Return 302 Found with Location header',
+      'Apply @Valid to trigger Bean Validation on ShortenRequest',
+    ],
+  },
+  {
+    name: 'UrlService',
+    tag: 'service', tagLabel: 'Service',
+    path: 'service/UrlService.java',
+    desc: 'Core business logic. Implements the cache-aside pattern, two-write short code generation, and expiry enforcement.',
+    responsibilities: [
+      'Check alias uniqueness before persisting',
+      'Two-write pattern: save "PENDING" → encode ID → update',
+      'Resolve short codes via Redis then PostgreSQL',
+      'Enforce expiry on cache misses',
+      'Write URLs to Redis with computed TTL',
+    ],
+  },
+  {
+    name: 'UrlRepository',
+    tag: 'repo', tagLabel: 'Repository',
+    path: 'repository/UrlRepository.java',
+    desc: 'Spring Data JPA repository extending JpaRepository<UrlMapping, Long>. Provides standard CRUD plus three custom queries.',
+    responsibilities: [
+      'findByShortCode(String) — redirect hot path lookup',
+      'existsByShortCode(String) — alias uniqueness check',
+      'deleteAllExpired(Instant) — bulk delete for cleanup job',
+      'Backed by unique B-tree index on short_code',
+    ],
+  },
+  {
+    name: 'UrlMapping',
+    tag: 'entity', tagLabel: 'Entity',
+    path: 'model/UrlMapping.java',
+    desc: 'JPA entity mapped to url_mappings table. Uses @GeneratedValue(IDENTITY) for auto-increment IDs. Timestamps are managed via @PrePersist lifecycle callback.',
+    responsibilities: [
+      'Persist short_code, original_url, created_at, expires_at',
+      'Auto-stamp createdAt via @PrePersist',
+      'isExpired() — check if expiresAt is in the past',
+      'Unique index on short_code column',
+    ],
+  },
+  {
+    name: 'Base62Encoder',
+    tag: 'util', tagLabel: 'Utility',
+    path: 'util/Base62Encoder.java',
+    desc: 'Encodes positive long values to Base62 strings using the 0-9a-zA-Z alphabet. Used to convert auto-increment database IDs into compact, URL-safe short codes.',
+    responsibilities: [
+      'encode(long id) → Base62 string',
+      'Validate id is positive (throws IllegalArgumentException otherwise)',
+      'Alphabet: 0-9a-zA-Z (62 characters)',
+      'encode(1_000_000) produces "4c92" (4 chars)',
+    ],
+  },
+  {
+    name: 'RedisConfig',
+    tag: 'config', tagLabel: 'Configuration',
+    path: 'config/RedisConfig.java',
+    desc: 'Declares the application-wide CacheManager bean backed by RedisCacheManager. Uses StringRedisSerializer for keys and JSON serializer for values. Currently not used by @Cacheable annotations — UrlService drives Redis directly.',
+    responsibilities: [
+      'Declare CacheManager @Bean',
+      'Configure 24-hour default TTL',
+      'Set StringRedisSerializer for keys',
+      'Set GenericJackson2JsonRedisSerializer for values',
+      'Disable null caching',
+    ],
+  },
+  {
+    name: 'ExpirationCleanupJob',
+    tag: 'scheduler', tagLabel: 'Scheduler',
+    path: 'scheduler/ExpirationCleanupJob.java',
+    desc: 'Scheduled @Component that runs nightly at 03:00 (configurable). Issues a single bulk JPQL DELETE to purge expired rows from PostgreSQL. Redis entries expire naturally via TTL.',
+    responsibilities: [
+      '@Scheduled(cron) — run at configurable time',
+      'deleteAllExpired(Instant.now()) — bulk delete',
+      '@Transactional — atomic delete',
+      'Log count of deleted rows',
+      'Leave Redis cleanup to natural TTL expiry',
+    ],
+  },
+  {
+    name: 'GlobalExceptionHandler',
+    tag: 'exception', tagLabel: 'Exception',
+    path: 'exception/GlobalExceptionHandler.java',
+    desc: '@RestControllerAdvice that translates application exceptions into structured JSON error responses with timestamp, status, and error fields.',
+    responsibilities: [
+      'Handle UrlNotFoundException → 404',
+      'Handle AliasAlreadyExistsException → 409',
+      'Handle MethodArgumentNotValidException → 400 with per-field map',
+      'Handle Exception catch-all → 500 (generic message, no leak)',
+    ],
+  },
+  {
+    name: 'ShortenRequest',
+    tag: 'dto', tagLabel: 'DTO',
+    path: 'dto/ShortenRequest.java',
+    desc: 'Inbound request DTO for POST /shorten. Bean Validation annotations enforce constraints before the controller method body executes.',
+    responsibilities: [
+      'originalUrl — @NotBlank + @URL',
+      'alias — optional, @Size(1-20) + @Pattern([a-zA-Z0-9_-])',
+      'expiresAt — optional ISO-8601 Instant',
+    ],
+  },
+  {
+    name: 'ShortenResponse',
+    tag: 'dto', tagLabel: 'DTO',
+    path: 'dto/ShortenResponse.java',
+    desc: 'Outbound response DTO returned in the 201 Created body. Built by UrlService using the Lombok @Builder pattern.',
+    responsibilities: [
+      'shortUrl — full clickable URL (base-url + "/" + shortCode)',
+      'shortCode — the code segment alone',
+      'originalUrl — the destination',
+      'createdAt — UTC creation timestamp',
+      'expiresAt — expiry timestamp or null',
+    ],
+  },
+];
+
+const TOPICS = [
+  {
+    name: 'url:{shortCode}',
+    type: 'Redis String Key',
+    desc: 'Primary cache key for the redirect hot path. Written by UrlService on every successful shorten() or cache-miss resolve(). Read first on every resolve() call before touching PostgreSQL.',
+    kvs: [
+      { k: 'Pattern', v: 'url:{shortCode}' },
+      { k: 'Example key', v: 'url:my-link' },
+      { k: 'Value type', v: 'String (plain URL)' },
+      { k: 'Example value', v: 'https://example.com/...' },
+      { k: 'TTL (expiring)', v: 'expiresAt - Instant.now()' },
+      { k: 'TTL (permanent)', v: '86400s (24 hours)' },
+      { k: 'Eviction', v: 'Natural TTL expiry' },
+      { k: 'Written by', v: 'UrlService.cacheUrl()' },
+      { k: 'Read by', v: 'UrlService.resolve()' },
+    ],
+  },
+  {
+    name: 'Cache-Aside Pattern',
+    type: 'Design Pattern',
+    desc: 'The application manages the cache directly rather than relying on @Cacheable annotations. On every resolve: check Redis first; on miss, query PostgreSQL, validate expiry, write to Redis, then return. This gives fine-grained TTL control.',
+    kvs: [
+      { k: 'Read strategy', v: 'Redis → PostgreSQL (on miss)' },
+      { k: 'Write strategy', v: 'Write-through (shorten primes cache)' },
+      { k: 'Invalidation', v: 'TTL-based only (no explicit delete)' },
+      { k: 'Redis client', v: 'StringRedisTemplate' },
+      { k: 'Key prefix', v: '"url:"' },
+      { k: 'Null caching', v: 'disabled (never cache misses)' },
+    ],
+  },
+  {
+    name: 'TTL Strategy',
+    type: 'Cache Configuration',
+    desc: 'UrlService computes the Redis TTL at write time to ensure cache entries automatically become invalid when the underlying URL expires, without requiring an explicit purge.',
+    kvs: [
+      { k: 'With expiresAt', v: 'Duration.between(now, expiresAt)' },
+      { k: 'Zero or negative TTL', v: 'Skip write (URL already expired)' },
+      { k: 'Without expiresAt', v: 'Duration.ofHours(24)' },
+      { k: 'Cleanup interaction', v: 'DB deleted at 03:00; Redis expires independently' },
+    ],
+  },
+  {
+    name: 'Actuator Endpoints',
+    type: 'Monitoring',
+    desc: 'Spring Actuator is configured to expose health, info, and metrics endpoints on port 8080. Health details are always shown, which reports DB and Redis connectivity.',
+    kvs: [
+      { k: 'GET /actuator/health', v: 'Service + DB + Redis health' },
+      { k: 'GET /actuator/info', v: 'App metadata' },
+      { k: 'GET /actuator/metrics', v: 'JVM, HTTP, datasource metrics' },
+      { k: 'Port', v: '8080 (same as API)' },
+      { k: 'show-details', v: 'always' },
+    ],
+  },
+  {
+    name: 'url_mappings table',
+    type: 'PostgreSQL Schema',
+    desc: 'Single table persisting all URL mappings. Auto-increment primary key drives Base62 short code generation. Unique index on short_code enables O(log n) lookups.',
+    kvs: [
+      { k: 'id', v: 'BIGSERIAL PRIMARY KEY' },
+      { k: 'short_code', v: 'VARCHAR(20) NOT NULL UNIQUE' },
+      { k: 'original_url', v: 'VARCHAR(2048) NOT NULL' },
+      { k: 'created_at', v: 'TIMESTAMPTZ NOT NULL' },
+      { k: 'expires_at', v: 'TIMESTAMPTZ (nullable)' },
+      { k: 'Index', v: 'idx_short_code (unique B-tree)' },
+    ],
+  },
+];
+
+/* ══════════════════════════════════════════════════
+   TAB SWITCHING
+══════════════════════════════════════════════════ */
+document.querySelectorAll('.tab-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const tab = btn.dataset.tab;
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById(tab + '-panel').classList.add('active');
+  });
+});
+
+/* ══════════════════════════════════════════════════
+   ARCHITECTURE — NODE CLICK
+══════════════════════════════════════════════════ */
+const sidePanel = document.getElementById('side-panel');
+const nodeDetail = document.getElementById('node-detail');
+
+function tagClass(tag) {
+  return 'tag-' + tag;
+}
+
+function showNode(id) {
+  const data = NODES[id];
+  if (!data) return;
+
+  document.querySelectorAll('.svg-node').forEach(n => n.classList.remove('selected'));
+  const svgNode = document.getElementById('node-' + id);
+  if (svgNode) svgNode.classList.add('selected');
+
+  sidePanel.classList.remove('empty');
+
+  nodeDetail.innerHTML = `
+    <h2>${data.label} <span class="node-tag ${tagClass(data.tag)}">${data.tagLabel}</span></h2>
+    <div class="node-path">${data.path}</div>
+    <div class="node-desc">${data.desc}</div>
+
+    <div class="detail-section">
+      <h3>Properties</h3>
+      <ul class="prop-list">
+        ${data.props.map(p => `
+          <li>
+            <span class="prop-key">${p.k}</span>
+            <span class="prop-val">${p.v}</span>
+          </li>`).join('')}
+      </ul>
+    </div>
+
+    ${data.code ? `
+    <div class="detail-section">
+      <h3>Code example</h3>
+      <pre class="code-block">${escHtml(data.code)}</pre>
+    </div>` : ''}
+  `;
+
+  document.querySelector('.side-panel-hint').style.display = 'none';
+  nodeDetail.classList.add('visible');
+}
+
+function escHtml(s) {
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+document.querySelectorAll('.svg-node').forEach(node => {
+  node.addEventListener('click', () => showNode(node.dataset.id));
+});
+
+/* ══════════════════════════════════════════════════
+   JOURNEYS
+══════════════════════════════════════════════════ */
+const journeySelector = document.getElementById('journey-selector');
+const journeyContainer = document.getElementById('journey-container');
+
+function renderJourney(journey) {
+  journeyContainer.innerHTML = `
+    <div class="journey-header">
+      <h2>${journey.label}</h2>
+      <p>${journey.desc}</p>
+    </div>
+    <div class="steps" id="steps-list">
+      ${journey.steps.map(s => `
+        <div class="step${s.highlight ? ' highlight' : ''}" data-step="${s.num}">
+          <div class="step-num">${s.num}</div>
+          <div class="step-body">
+            <h3>${s.title} <span class="step-tag ${s.tag}">${s.tagLabel}</span></h3>
+            <p>${s.desc}</p>
+            ${s.code ? `<div class="step-code">${escHtml(s.code)}</div>` : ''}
+          </div>
+        </div>`).join('')}
+    </div>
+  `;
+
+  // Animate steps in
+  const steps = document.querySelectorAll('.step');
+  steps.forEach((step, i) => {
+    setTimeout(() => step.classList.add('visible'), i * 80);
+  });
+}
+
+JOURNEYS.forEach((j, i) => {
+  const btn = document.createElement('button');
+  btn.className = 'journey-btn' + (i === 0 ? ' active' : '');
+  btn.textContent = j.label;
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.journey-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    renderJourney(j);
+  });
+  journeySelector.appendChild(btn);
+});
+
+renderJourney(JOURNEYS[0]);
+
+/* ══════════════════════════════════════════════════
+   COMPONENTS GRID
+══════════════════════════════════════════════════ */
+const compGrid = document.getElementById('comp-grid');
+COMPS.forEach(c => {
+  const card = document.createElement('div');
+  card.className = 'comp-card';
+  card.innerHTML = `
+    <div class="comp-card-header">
+      <h3>${c.name}</h3>
+      <span class="node-tag ${tagClass(c.tag)}">${c.tagLabel}</span>
+    </div>
+    <div class="comp-path">${c.path}</div>
+    <div class="comp-desc">${c.desc}</div>
+    <ul class="comp-responsibilities">
+      ${c.responsibilities.map(r => `<li>${r}</li>`).join('')}
+    </ul>
+  `;
+  compGrid.appendChild(card);
+});
+
+/* ══════════════════════════════════════════════════
+   TOPICS / CACHE KEYS GRID
+══════════════════════════════════════════════════ */
+const topicsGrid = document.getElementById('topics-grid');
+TOPICS.forEach(t => {
+  const card = document.createElement('div');
+  card.className = 'topic-card';
+  card.innerHTML = `
+    <h3>${escHtml(t.name)}</h3>
+    <div class="topic-type">${t.type}</div>
+    <div class="topic-desc">${t.desc}</div>
+    ${t.kvs.map(kv => `
+      <div class="kv-row">
+        <span class="kv-key">${kv.k}</span>
+        <span class="kv-val">${escHtml(kv.v)}</span>
+      </div>`).join('')}
+  `;
+  topicsGrid.appendChild(card);
+});
+</script>
+</body>
+</html>

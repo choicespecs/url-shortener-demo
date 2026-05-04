@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>url-shortener — Architecture Learning Guide</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:        #0d1117;
+      --surface:   #161b22;
+      --border:    #30363d;
+      --text:      #e6edf3;
+      --muted:     #8b949e;
+      --accent:    #58a6ff;
+      --accent2:   #3fb950;
+      --accent3:   #f78166;
+      --accent4:   #d2a8ff;
+      --accent5:   #ffa657;
+    }
+
+    html, body {
+      height: 100%;
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+      line-height: 1.6;
+    }
+
+    /* ── hero ── */
+    .hero {
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      padding: 2rem;
+      position: relative;
+      overflow: hidden;
+    }
+
+    /* animated grid background */
+    .hero::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background-image:
+        linear-gradient(rgba(88,166,255,0.04) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(88,166,255,0.04) 1px, transparent 1px);
+      background-size: 40px 40px;
+      pointer-events: none;
+    }
+
+    /* radial glow */
+    .hero::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: radial-gradient(ellipse 60% 50% at 50% 30%, rgba(88,166,255,0.08) 0%, transparent 70%);
+      pointer-events: none;
+    }
+
+    .hero-content { position: relative; z-index: 1; max-width: 700px; }
+
+    .badge {
+      display: inline-block;
+      padding: 0.25rem 0.75rem;
+      border-radius: 999px;
+      border: 1px solid var(--border);
+      background: var(--surface);
+      color: var(--muted);
+      font-size: 0.75rem;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      margin-bottom: 1.5rem;
+    }
+
+    h1 {
+      font-size: clamp(2rem, 5vw, 3.5rem);
+      font-weight: 800;
+      letter-spacing: -0.02em;
+      line-height: 1.1;
+      margin-bottom: 1.25rem;
+    }
+
+    h1 span.accent { color: var(--accent); }
+
+    .subtitle {
+      font-size: 1.1rem;
+      color: var(--muted);
+      max-width: 520px;
+      margin: 0 auto 2.5rem;
+    }
+
+    /* ── tech chips ── */
+    .chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+      justify-content: center;
+      margin-bottom: 3rem;
+    }
+
+    .chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+      padding: 0.35rem 0.85rem;
+      border-radius: 999px;
+      border: 1px solid var(--border);
+      background: var(--surface);
+      font-size: 0.8rem;
+      font-weight: 500;
+      color: var(--text);
+      white-space: nowrap;
+    }
+
+    .chip .dot {
+      width: 7px; height: 7px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+
+    .chip.java    .dot { background: var(--accent5); }
+    .chip.spring  .dot { background: var(--accent2); }
+    .chip.pg      .dot { background: var(--accent); }
+    .chip.redis   .dot { background: var(--accent3); }
+    .chip.maven   .dot { background: var(--accent4); }
+    .chip.actuator .dot { background: var(--muted); }
+
+    /* ── CTA button ── */
+    .cta {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.6rem;
+      padding: 0.85rem 2rem;
+      border-radius: 8px;
+      background: var(--accent);
+      color: #0d1117;
+      font-weight: 700;
+      font-size: 1rem;
+      text-decoration: none;
+      transition: opacity 0.2s, transform 0.2s;
+      box-shadow: 0 0 24px rgba(88,166,255,0.3);
+    }
+
+    .cta:hover { opacity: 0.88; transform: translateY(-2px); }
+
+    .cta svg { width: 18px; height: 18px; fill: currentColor; }
+
+    /* ── stats row ── */
+    .stats {
+      display: flex;
+      gap: 3rem;
+      justify-content: center;
+      flex-wrap: wrap;
+      margin-top: 4rem;
+      padding-top: 3rem;
+      border-top: 1px solid var(--border);
+      position: relative; z-index: 1;
+    }
+
+    .stat { text-align: center; }
+    .stat-num {
+      font-size: 2rem;
+      font-weight: 800;
+      color: var(--accent);
+      display: block;
+      line-height: 1;
+    }
+    .stat-label {
+      font-size: 0.8rem;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      margin-top: 0.35rem;
+    }
+
+    /* ── feature cards ── */
+    .features {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 1rem;
+      max-width: 700px;
+      margin: 3rem auto 0;
+      position: relative; z-index: 1;
+    }
+
+    .feature-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 1.25rem;
+      text-align: left;
+    }
+
+    .feature-card .icon {
+      font-size: 1.5rem;
+      margin-bottom: 0.6rem;
+      display: block;
+    }
+
+    .feature-card h3 {
+      font-size: 0.9rem;
+      font-weight: 700;
+      margin-bottom: 0.3rem;
+    }
+
+    .feature-card p {
+      font-size: 0.8rem;
+      color: var(--muted);
+    }
+
+    /* ── footer ── */
+    footer {
+      text-align: center;
+      padding: 1.5rem;
+      color: var(--muted);
+      font-size: 0.78rem;
+      border-top: 1px solid var(--border);
+    }
+  </style>
+</head>
+<body>
+  <section class="hero">
+    <div class="hero-content">
+      <span class="badge">Interactive Architecture Guide</span>
+
+      <h1>url&#8209;<span class="accent">shortener</span></h1>
+
+      <p class="subtitle">
+        A production-ready URL shortener built with Spring Boot 3.2.5 and Java 21.
+        Redis caching in front of PostgreSQL persistence, designed to scale to ~1M users.
+      </p>
+
+      <div class="chips">
+        <span class="chip java">  <span class="dot"></span>Java 21</span>
+        <span class="chip spring"><span class="dot"></span>Spring Boot 3.2.5</span>
+        <span class="chip spring"><span class="dot"></span>Spring MVC</span>
+        <span class="chip spring"><span class="dot"></span>Spring Data JPA</span>
+        <span class="chip pg">   <span class="dot"></span>PostgreSQL</span>
+        <span class="chip redis"><span class="dot"></span>Redis 7</span>
+        <span class="chip maven"><span class="dot"></span>Maven</span>
+        <span class="chip actuator"><span class="dot"></span>Spring Actuator</span>
+        <span class="chip spring"><span class="dot"></span>Jakarta Validation</span>
+        <span class="chip java"> <span class="dot"></span>JUnit 5 + Mockito</span>
+      </div>
+
+      <a href="learning-guide.html" class="cta">
+        <svg viewBox="0 0 24 24"><path d="M13 3L4 14h7l-2 7 9-11h-7z"/></svg>
+        Open Learning Guide
+      </a>
+
+      <div class="features">
+        <div class="feature-card">
+          <span class="icon">&#128279;</span>
+          <h3>Architecture Diagram</h3>
+          <p>Clickable SVG with animated data packets and component side panels</p>
+        </div>
+        <div class="feature-card">
+          <span class="icon">&#128228;</span>
+          <h3>Data Journeys</h3>
+          <p>Step-by-step walkthroughs of every major request flow end-to-end</p>
+        </div>
+        <div class="feature-card">
+          <span class="icon">&#129054;</span>
+          <h3>Components</h3>
+          <p>Card grid for every service, repository, entity, and utility class</p>
+        </div>
+        <div class="feature-card">
+          <span class="icon">&#128273;</span>
+          <h3>Cache Keys</h3>
+          <p>Redis key schema, TTL strategy, and cache-aside pattern detail</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="stats">
+      <div class="stat">
+        <span class="stat-num">10</span>
+        <span class="stat-label">Components</span>
+      </div>
+      <div class="stat">
+        <span class="stat-num">3</span>
+        <span class="stat-label">Data Journeys</span>
+      </div>
+      <div class="stat">
+        <span class="stat-num">2</span>
+        <span class="stat-label">REST Endpoints</span>
+      </div>
+      <div class="stat">
+        <span class="stat-num">1M</span>
+        <span class="stat-label">Target Scale</span>
+      </div>
+    </div>
+  </section>
+
+  <footer>
+    url-shortener &mdash; Spring Boot 3.2.5 / Java 21 &mdash; Architecture Learning Guide
+  </footer>
+</body>
+</html>
