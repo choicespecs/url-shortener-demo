@@ -94,13 +94,35 @@
 
     .diagram-area {
       flex: 1;
-      overflow: auto;
+      overflow: hidden;
       padding: 1.5rem;
       display: flex;
       align-items: center;
       justify-content: center;
       min-width: 0;
+      position: relative;
     }
+
+    .diagram-controls {
+      position: absolute;
+      top: 1rem;
+      right: 1rem;
+      z-index: 10;
+      display: flex;
+      gap: .4rem;
+    }
+
+    .ctrl-btn {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      color: var(--muted);
+      padding: .3rem .65rem;
+      border-radius: 6px;
+      font-size: .73rem;
+      cursor: pointer;
+      transition: color .15s, border-color .15s;
+    }
+    .ctrl-btn:hover { color: var(--text); border-color: var(--muted); }
 
     .side-panel {
       width: 340px;
@@ -214,7 +236,11 @@
     #arch-svg {
       max-width: 100%;
       height: auto;
+      cursor: grab;
+      user-select: none;
+      touch-action: none;
     }
+    #arch-svg.panning { cursor: grabbing; }
 
     .svg-node {
       cursor: pointer;
@@ -473,6 +499,11 @@
     <div id="arch-panel" class="tab-panel active">
       <div class="arch-layout">
         <div class="diagram-area">
+          <div class="diagram-controls">
+            <button class="ctrl-btn" id="zoom-in-btn">＋</button>
+            <button class="ctrl-btn" id="zoom-out-btn">－</button>
+            <button class="ctrl-btn" id="reset-view-btn">Reset</button>
+          </div>
           <svg id="arch-svg" viewBox="0 0 780 520" xmlns="http://www.w3.org/2000/svg">
             <defs>
               <marker id="arrow" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
@@ -509,25 +540,25 @@
             <!-- ── EDGES (draw first, behind nodes) ── -->
 
             <!-- Client → UrlController -->
-            <path d="M 390 95 L 390 140" stroke="#58a6ff" stroke-width="1.5" fill="none" marker-end="url(#arrow)" class="edge-flow" stroke-dasharray="6 4"/>
+            <path id="e-client-ctrl" d="M 390 95 L 390 140" stroke="#58a6ff" stroke-width="1.5" fill="none" marker-end="url(#arrow)" class="edge-flow" stroke-dasharray="6 4"/>
 
             <!-- UrlController → UrlService -->
-            <path d="M 390 210 L 390 250" stroke="#58a6ff" stroke-width="1.5" fill="none" marker-end="url(#arrow)" class="edge-flow" stroke-dasharray="6 4"/>
+            <path id="e-ctrl-svc" d="M 390 210 L 390 250" stroke="#58a6ff" stroke-width="1.5" fill="none" marker-end="url(#arrow)" class="edge-flow" stroke-dasharray="6 4"/>
 
             <!-- UrlService → UrlRepository -->
-            <path d="M 310 310 L 230 350" stroke="#d2a8ff" stroke-width="1.5" fill="none" marker-end="url(#arrow)" class="edge-flow" stroke-dasharray="6 4"/>
+            <path id="e-svc-repo" d="M 310 310 L 230 350" stroke="#d2a8ff" stroke-width="1.5" fill="none" marker-end="url(#arrow)" class="edge-flow" stroke-dasharray="6 4"/>
 
             <!-- UrlService → Redis -->
-            <path d="M 470 310 L 580 350" stroke="#f78166" stroke-width="1.5" fill="none" marker-end="url(#arrow-red)" class="edge-flow" stroke-dasharray="6 4"/>
+            <path id="e-svc-redis" d="M 470 310 L 580 350" stroke="#f78166" stroke-width="1.5" fill="none" marker-end="url(#arrow-red)" class="edge-flow" stroke-dasharray="6 4"/>
 
             <!-- UrlRepository → PostgreSQL -->
-            <path d="M 200 410 L 200 440" stroke="#d2a8ff" stroke-width="1.5" fill="none" marker-end="url(#arrow)" stroke-dasharray="4 4"/>
+            <path id="e-repo-pg" d="M 200 410 L 200 440" stroke="#d2a8ff" stroke-width="1.5" fill="none" marker-end="url(#arrow)" stroke-dasharray="4 4"/>
 
             <!-- ExpirationCleanupJob → UrlRepository (scheduler) -->
-            <path d="M 600 450 Q 400 430 260 400" stroke="#ffa657" stroke-width="1.5" fill="none" marker-end="url(#arrow-orange)" class="edge-flow" stroke-dasharray="6 4"/>
+            <path id="e-job-repo" d="M 600 450 Q 400 430 260 400" stroke="#ffa657" stroke-width="1.5" fill="none" marker-end="url(#arrow-orange)" class="edge-flow" stroke-dasharray="6 4"/>
 
             <!-- GlobalExceptionHandler (side) → UrlController -->
-            <path d="M 670 185 L 490 185" stroke="#f78166" stroke-width="1" fill="none" stroke-dasharray="4 3" opacity=".6"/>
+            <path id="e-exc-ctrl" d="M 670 185 L 490 185" stroke="#f78166" stroke-width="1" fill="none" stroke-dasharray="4 3" opacity=".6"/>
 
             <!-- ── NODES ── -->
 
@@ -567,7 +598,7 @@
             </g>
 
             <!-- edge: UrlService → Base62Encoder -->
-            <path d="M 270 278 L 215 278" stroke="#e3b341" stroke-width="1" fill="none" stroke-dasharray="4 3" opacity=".7" marker-end="url(#arrow-orange)"/>
+            <path id="e-svc-b62" d="M 270 278 L 215 278" stroke="#e3b341" stroke-width="1" fill="none" stroke-dasharray="4 3" opacity=".7" marker-end="url(#arrow-orange)"/>
 
             <!-- UrlRepository -->
             <g class="svg-node" id="node-urlrepository" data-id="urlrepository">
@@ -917,7 +948,7 @@ public CacheManager cacheManager(
       { k: 'Redis purge', v: 'no — relies on TTL expiry' },
       { k: 'Multi-replica safe', v: 'idempotent but duplicates work' },
     ],
-    code: `@Scheduled(cron = "${app.cleanup.cron:0 0 3 * * *}")
+    code: `@Scheduled(cron = "\${app.cleanup.cron:0 0 3 * * *}")
 @Transactional
 public void deleteExpiredUrls() {
   log.info("Starting expired URL cleanup job");
@@ -1151,7 +1182,7 @@ Location: https://example.com/very/long/path`,
         num: 1, title: 'Spring scheduler triggers at 03:00',
         tag: 'cron', tagLabel: 'Cron',
         desc: 'Spring\'s task scheduler evaluates the cron expression "0 0 3 * * *" (configurable via app.cleanup.cron). The deleteExpiredUrls() method is invoked in a new thread.',
-        code: `@Scheduled(cron = "${app.cleanup.cron:0 0 3 * * *}")
+        code: `@Scheduled(cron = "\${app.cleanup.cron:0 0 3 * * *}")
 @Transactional
 public void deleteExpiredUrls() { ... }`,
       },
@@ -1444,9 +1475,7 @@ function escHtml(s) {
   return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 }
 
-document.querySelectorAll('.svg-node').forEach(node => {
-  node.addEventListener('click', () => showNode(node.dataset.id));
-});
+// Node clicks are handled by the draggable-nodes system below (mouseup when no movement).
 
 /* ══════════════════════════════════════════════════
    JOURNEYS
@@ -1534,6 +1563,268 @@ TOPICS.forEach(t => {
   `;
   topicsGrid.appendChild(card);
 });
+
+/* ══════════════════════════════════════════════════
+   DRAGGABLE NODES  (click-to-inspect + drag-to-move)
+══════════════════════════════════════════════════ */
+(function() {
+  const svg = document.getElementById('arch-svg');
+
+  // Base geometry: matches the SVG's hardcoded node positions
+  const GEO = {
+    client:                 {t:'r', x:300, y:58,  w:180, h:44},
+    urlcontroller:          {t:'r', x:270, y:143, w:240, h:44},
+    globalexceptionhandler: {t:'r', x:580, y:160, w:175, h:44},
+    urlservice:             {t:'r', x:270, y:253, w:240, h:44},
+    base62encoder:          {t:'r', x:60,  y:253, w:155, h:44},
+    urlrepository:          {t:'r', x:90,  y:353, w:220, h:44},
+    redis:                  {t:'r', x:510, y:353, w:200, h:44},
+    postgresql:             {t:'e', cx:200, cy:462, rx:100, ry:30},
+    expirationcleanupjob:   {t:'r', x:500, y:420, w:220, h:44},
+    redisconfig:            {t:'r', x:510, y:253, w:175, h:44},
+  };
+
+  // Per-node drag offsets (start at 0,0)
+  const OFF = {};
+  Object.keys(GEO).forEach(k => OFF[k] = {x:0, y:0});
+
+  // Compute a connection anchor point on the node boundary
+  function anchor(id, side) {
+    const g = GEO[id], o = OFF[id];
+    if (g.t === 'r') {
+      const cx = g.x + g.w/2 + o.x, cy = g.y + g.h/2 + o.y;
+      if (side === 'top')    return {x: cx,              y: g.y + o.y};
+      if (side === 'bottom') return {x: cx,              y: g.y + g.h + o.y};
+      if (side === 'left')   return {x: g.x + o.x,       y: cy};
+      if (side === 'right')  return {x: g.x + g.w + o.x, y: cy};
+    } else {
+      const cx = g.cx + o.x, cy = g.cy + o.y;
+      if (side === 'top')    return {x: cx, y: g.cy - g.ry + o.y};
+      if (side === 'bottom') return {x: cx, y: g.cy + g.ry + o.y};
+      if (side === 'left')   return {x: g.cx - g.rx + o.x, y: cy};
+      if (side === 'right')  return {x: g.cx + g.rx + o.x, y: cy};
+    }
+  }
+
+  // Edge definitions: edgeId=visible path, pid=animated packet path
+  const EDGES = [
+    {edgeId:'e-client-ctrl', pid:'path-client-ctrl', from:'client',               fs:'bottom', to:'urlcontroller',          ts:'top'},
+    {edgeId:'e-ctrl-svc',    pid:'path-ctrl-svc',    from:'urlcontroller',         fs:'bottom', to:'urlservice',             ts:'top'},
+    {edgeId:'e-svc-repo',    pid:'path-svc-repo',    from:'urlservice',            fs:'bottom', to:'urlrepository',          ts:'top'},
+    {edgeId:'e-svc-redis',   pid:'path-svc-redis',   from:'urlservice',            fs:'bottom', to:'redis',                  ts:'top'},
+    {edgeId:'e-repo-pg',     pid:'path-repo-pg',     from:'urlrepository',         fs:'bottom', to:'postgresql',             ts:'top'},
+    {edgeId:'e-job-repo',    pid:null,               from:'expirationcleanupjob',  fs:'left',   to:'urlrepository',          ts:'right', q:true},
+    {edgeId:'e-exc-ctrl',    pid:null,               from:'globalexceptionhandler',fs:'left',   to:'urlcontroller',          ts:'right'},
+    {edgeId:'e-svc-b62',     pid:null,               from:'urlservice',            fs:'left',   to:'base62encoder',          ts:'right'},
+  ];
+
+  function buildD(e) {
+    const f = anchor(e.from, e.fs), t = anchor(e.to, e.ts);
+    if (e.q) {
+      const mx = (f.x + t.x) / 2, my = (f.y + t.y) / 2 - 40;
+      return `M ${f.x} ${f.y} Q ${mx} ${my} ${t.x} ${t.y}`;
+    }
+    return `M ${f.x} ${f.y} L ${t.x} ${t.y}`;
+  }
+
+  function refreshEdges(nodeId) {
+    EDGES.forEach(e => {
+      if (e.from !== nodeId && e.to !== nodeId) return;
+      const d = buildD(e);
+      const ep = document.getElementById(e.edgeId);
+      if (ep) ep.setAttribute('d', d);
+      if (e.pid) {
+        const pp = document.getElementById(e.pid);
+        if (pp) pp.setAttribute('d', d);
+      }
+    });
+  }
+
+  // Sync all edge paths with computed geometry on load
+  Object.keys(GEO).forEach(id => refreshEdges(id));
+
+  // Convert a screen clientX/Y to the SVG coordinate space (respects current viewBox/zoom)
+  function toSvgCoords(clientX, clientY) {
+    const r = svg.getBoundingClientRect(), vb = svg.viewBox.baseVal;
+    return {
+      x: (clientX - r.left) / r.width  * vb.width  + vb.x,
+      y: (clientY - r.top)  / r.height * vb.height + vb.y,
+    };
+  }
+
+  let drag = null, moved = false;
+
+  document.querySelectorAll('.svg-node').forEach(node => {
+    node.style.cursor = 'grab';
+    node.addEventListener('mousedown', e => {
+      if (e.button !== 0) return;
+      e.stopPropagation(); // prevent SVG pan from starting
+      e.preventDefault();
+      const id = node.dataset.id;
+      const p  = toSvgCoords(e.clientX, e.clientY);
+      drag  = {id, sx: p.x, sy: p.y, ox: OFF[id].x, oy: OFF[id].y};
+      moved = false;
+      node.style.cursor = 'grabbing';
+    });
+  });
+
+  window.addEventListener('mousemove', e => {
+    if (!drag) return;
+    const p  = toSvgCoords(e.clientX, e.clientY);
+    const dx = p.x - drag.sx, dy = p.y - drag.sy;
+    if (Math.abs(dx) > 2 || Math.abs(dy) > 2) moved = true;
+    OFF[drag.id] = {x: drag.ox + dx, y: drag.oy + dy};
+    document.getElementById('node-' + drag.id)
+      ?.setAttribute('transform', `translate(${OFF[drag.id].x},${OFF[drag.id].y})`);
+    refreshEdges(drag.id);
+  });
+
+  window.addEventListener('mouseup', () => {
+    if (!drag) return;
+    const el = document.getElementById('node-' + drag.id);
+    if (el) el.style.cursor = 'grab';
+    if (!moved) showNode(drag.id); // short press = inspect
+    drag = null;
+  });
+
+  // Touch: single-finger drag on a node
+  let touchDrag = null;
+  document.querySelectorAll('.svg-node').forEach(node => {
+    node.addEventListener('touchstart', e => {
+      e.stopPropagation();
+      if (e.touches.length !== 1) return;
+      const id = node.dataset.id;
+      const p  = toSvgCoords(e.touches[0].clientX, e.touches[0].clientY);
+      touchDrag = {id, sx: p.x, sy: p.y, ox: OFF[id].x, oy: OFF[id].y, moved: false};
+      e.preventDefault();
+    }, {passive: false});
+  });
+
+  svg.addEventListener('touchmove', e => {
+    if (!touchDrag || e.touches.length !== 1) return;
+    const p  = toSvgCoords(e.touches[0].clientX, e.touches[0].clientY);
+    const dx = p.x - touchDrag.sx, dy = p.y - touchDrag.sy;
+    if (Math.abs(dx) > 3 || Math.abs(dy) > 3) touchDrag.moved = true;
+    OFF[touchDrag.id] = {x: touchDrag.ox + dx, y: touchDrag.oy + dy};
+    document.getElementById('node-' + touchDrag.id)
+      ?.setAttribute('transform', `translate(${OFF[touchDrag.id].x},${OFF[touchDrag.id].y})`);
+    refreshEdges(touchDrag.id);
+    e.preventDefault();
+  }, {passive: false});
+
+  svg.addEventListener('touchend', () => {
+    if (touchDrag) {
+      if (!touchDrag.moved) showNode(touchDrag.id);
+      touchDrag = null;
+    }
+  });
+})();
+
+/* ══════════════════════════════════════════════════
+   SVG PAN / ZOOM
+══════════════════════════════════════════════════ */
+(function() {
+  const svg = document.getElementById('arch-svg');
+  const VB_W = 780, VB_H = 520;
+  let vb = { x: 0, y: 0, w: VB_W, h: VB_H };
+  let dragging = false, lastPt = null, didDrag = false;
+
+  function applyVB() {
+    svg.setAttribute('viewBox', `${vb.x} ${vb.y} ${vb.w} ${vb.h}`);
+  }
+
+  function zoom(factor, cx, cy) {
+    const rect = svg.getBoundingClientRect();
+    const px = cx != null ? (cx - rect.left) / rect.width  : 0.5;
+    const py = cy != null ? (cy - rect.top)  / rect.height : 0.5;
+    const svgX = vb.x + px * vb.w;
+    const svgY = vb.y + py * vb.h;
+    vb.w *= factor;
+    vb.h *= factor;
+    vb.x = svgX - px * vb.w;
+    vb.y = svgY - py * vb.h;
+    applyVB();
+  }
+
+  svg.addEventListener('mousedown', e => {
+    if (e.button !== 0) return;
+    if (e.target.closest('.svg-node')) return;
+    dragging = true;
+    didDrag = false;
+    lastPt = { x: e.clientX, y: e.clientY };
+    svg.classList.add('panning');
+    e.preventDefault();
+  });
+
+  window.addEventListener('mousemove', e => {
+    if (!dragging) return;
+    const rect = svg.getBoundingClientRect();
+    const dx = (e.clientX - lastPt.x) / rect.width  * vb.w;
+    const dy = (e.clientY - lastPt.y) / rect.height * vb.h;
+    if (Math.abs(dx) > 1 || Math.abs(dy) > 1) didDrag = true;
+    vb.x -= dx;
+    vb.y -= dy;
+    lastPt = { x: e.clientX, y: e.clientY };
+    applyVB();
+  });
+
+  window.addEventListener('mouseup', () => {
+    if (!dragging) return;
+    dragging = false;
+    svg.classList.remove('panning');
+  });
+
+  svg.addEventListener('wheel', e => {
+    e.preventDefault();
+    zoom(e.deltaY > 0 ? 1.12 : 0.89, e.clientX, e.clientY);
+  }, { passive: false });
+
+  // Touch support
+  let lastTouchDist = null;
+  svg.addEventListener('touchstart', e => {
+    if (e.touches.length === 1) {
+      dragging = true;
+      lastPt = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+    } else if (e.touches.length === 2) {
+      dragging = false;
+      const dx = e.touches[0].clientX - e.touches[1].clientX;
+      const dy = e.touches[0].clientY - e.touches[1].clientY;
+      lastTouchDist = Math.hypot(dx, dy);
+    }
+    e.preventDefault();
+  }, { passive: false });
+
+  svg.addEventListener('touchmove', e => {
+    if (e.touches.length === 1 && dragging) {
+      const rect = svg.getBoundingClientRect();
+      const dx = (e.touches[0].clientX - lastPt.x) / rect.width  * vb.w;
+      const dy = (e.touches[0].clientY - lastPt.y) / rect.height * vb.h;
+      vb.x -= dx;
+      vb.y -= dy;
+      lastPt = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+      applyVB();
+    } else if (e.touches.length === 2 && lastTouchDist != null) {
+      const dx = e.touches[0].clientX - e.touches[1].clientX;
+      const dy = e.touches[0].clientY - e.touches[1].clientY;
+      const dist = Math.hypot(dx, dy);
+      zoom(lastTouchDist / dist,
+        (e.touches[0].clientX + e.touches[1].clientX) / 2,
+        (e.touches[0].clientY + e.touches[1].clientY) / 2);
+      lastTouchDist = dist;
+    }
+    e.preventDefault();
+  }, { passive: false });
+
+  svg.addEventListener('touchend', () => { dragging = false; lastTouchDist = null; });
+
+  // Control buttons
+  document.getElementById('zoom-in-btn').addEventListener('click',  () => zoom(0.8));
+  document.getElementById('zoom-out-btn').addEventListener('click', () => zoom(1.25));
+  document.getElementById('reset-view-btn').addEventListener('click', () => {
+    vb = { x: 0, y: 0, w: VB_W, h: VB_H };
+    applyVB();
+  });
+})();
 </script>
 </body>
 </html>
